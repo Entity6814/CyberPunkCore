@@ -4,7 +4,7 @@
   "Desc": "Cyberpunk Core is an audio-reactive desktop HUD with centered now-playing artwork, live spectrum visualizers, animated particle fields, seven neon themes, and CPU, memory, and GPU telemetry. Customize the clock, visualizer, HUD layout, and image or video background. Nebula particle-field inspiration: Susbananaa's Nebulaw-wallpaper.",
   "Author": "Entity6814",
   "License": "MIT",
-  "Contact": "",
+  "Contact": "https://github.com/Entity6814/CyberPunkCore",
   "Tags": ["Cyberpunk", "Audio Visualizer", "System HUD", "Neon"],
   "Type": 1,
   "FileName": "index.html",

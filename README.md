@@ -27,6 +27,8 @@ An audio-reactive cyberpunk desktop HUD built around a central reactor dial. It 
 
 The Nebula particle-field theme and motion modes were inspired by [Nebulaw-wallpaper](https://github.com/Susbananaa/Nebulaw-wallpaper) by [Susbananaa](https://github.com/Susbananaa). Thank you for the inspiration.
 
+The Lively wallpaper details page's website link points to the Cyberpunk Core project repository.
+
 ## Customization
 
 Use Lively's wallpaper properties to change the theme, grid and tile transparency, audio sensitivity, particle settings, and widget visibility. The gear button opens equivalent in-wallpaper controls.
