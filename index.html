@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyberpunk HUD - Lively Wallpaper</title>
+    <style>
+        :root {
+            --bg-color: #05070f;
+            --primary-color: #00f3ff;
+            --primary-glow: rgba(0, 243, 255, 0.4);
+            --secondary-color: #ff0055;
+            --secondary-glow: rgba(255, 0, 85, 0.4);
+            --accent-yellow: #fcee0a;
+            --text-color: #e2f1f7;
+            --panel-opacity: .55;
+            --panel-bg: rgba(8, 14, 28, var(--panel-opacity));
+            --border-color: rgba(0, 243, 255, 0.3);
+            --font-family: 'Consolas', 'Courier New', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #custom-background { position:fixed; inset:0; z-index:1; display:none; overflow:hidden; background-position:center; background-size:cover; background-repeat:no-repeat; pointer-events:none; }
+        #custom-background-video { display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Scanline and overlay effects */
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.3) 50%
+            );
+            background-size: 100% 4px;
+            z-index: 2;
+            pointer-events: none;
+            opacity: var(--grid-opacity, 0.3);
+        }
+
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.85);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* HUD Overlay HTML UI */
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 24px;
+        }
+
+        /* Allow pointer events for interactive UI elements */
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Framing Brackets */
+        .corner-bracket {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-color: var(--primary-color);
+            border-style: solid;
+            filter: drop-shadow(0 0 6px var(--primary-glow));
+            transition: border-color 0.3s ease;
+        }
+
+        .top-left { top: 16px; left: 16px; border-width: 3px 0 0 3px; }
+        .top-right { top: 16px; right: 16px; border-width: 3px 3px 0 0; }
+        .bottom-left { bottom: 16px; left: 16px; border-width: 0 0 3px 3px; }
+        .bottom-right { bottom: 16px; right: 16px; border-width: 0 3px 3px 0; }
+
+        /* HUD Header bar */
+        .hud-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
+        }
+
+        .brand-title {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .brand-title h1 {
+            font-size: 1.4rem;
+            letter-spacing: 4px;
+            color: var(--primary-color);
+            text-shadow: 0 0 10px var(--primary-glow);
+            text-transform: uppercase;
+        }
+
+        .brand-title span {
+            font-size: 0.7rem;
+            color: rgba(226, 241, 247, 0.6);
+            letter-spacing: 2px;
+        }
+
+        /* Clock Widget */
+        .clock-widget {
+            text-align: right;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 10px 18px;
+            border-radius: 4px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5), inset 0 0 10px var(--primary-glow);
+            transition: all .25s ease;
+        }
+
+        .clock-time {
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: var(--primary-color);
+            text-shadow: 0 0 12px var(--primary-glow);
+        }
+
+        .clock-date {
+            font-size: 0.75rem;
+            color: var(--secondary-color);
+            letter-spacing: 2px;
+            margin-top: 2px;
+            text-transform: uppercase;
+        }
+        .clock-widget.clock-style-minimal { background:transparent; border-color:transparent; box-shadow:none; padding:6px 10px; }
+        .clock-widget.clock-style-minimal .clock-time { text-shadow:none; letter-spacing:1px; }
+        .clock-widget.clock-style-terminal { border-radius:0; border-left:3px solid var(--primary-color); box-shadow:inset 8px 0 16px rgba(0,0,0,.35); }
+        .clock-widget.clock-style-terminal .clock-date { color:var(--primary-color); }
+
+        /* Telemetry Side Panels */
+        .hud-middle {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .side-panel {
+            width: max-content;
+            min-width: 310px;
+            max-width: min(34vw, 400px);
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-left: 3px solid var(--primary-color);
+            padding: 16px;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+        }
+
+        .panel-title {
+            font-size: 0.75rem;
+            color: var(--primary-color);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .metric-row {
+            margin-bottom: 10px;
+        }
+
+        .metric-label {
+            display: flex;
+            justify-content: space-between;
+            gap: 14px;
+            font-size: 0.7rem;
+            margin-bottom: 4px;
+            color: rgba(226, 241, 247, 0.8);
+        }
+
+        .metric-bar-bg {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .metric-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            width: 50%;
+            transition: width 0.4s ease;
+            box-shadow: 0 0 8px var(--primary-glow);
+        }
+
+        .metric-label span { white-space:nowrap; }
+        .metric-label span:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+        .telemetry-footer { border-top:1px solid var(--border-color); padding-top:9px; display:grid; gap:6px; font-size:.62rem; color:rgba(226,241,247,.66); letter-spacing:.6px; }
+        .telemetry-footer div { display:flex; justify-content:space-between; gap:12px; }
+        .telemetry-footer strong { color:var(--primary-color); font-weight:600; white-space:nowrap; }
+        #cpu-model { max-width:185px; overflow:hidden; text-overflow:ellipsis; }
+        .spectrum-strip { height:44px; display:flex; align-items:center; gap:3px; padding:4px 0; border-bottom:1px solid var(--border-color); }
+        .spectrum-strip i { flex:1; min-width:2px; height:3px; background:linear-gradient(0deg,var(--secondary-color),var(--primary-color)); box-shadow:0 0 6px var(--primary-glow); transition:height .09s linear; }
+        .audio-band-readouts { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        .audio-band { border:1px solid var(--border-color); padding:7px 8px; background:rgba(0,0,0,.18); display:grid; gap:5px; }
+        .audio-band span { color:rgba(226,241,247,.58); font-size:.58rem; letter-spacing:1px; }
+        .audio-band strong { color:var(--primary-color); font-size:.75rem; font-variant-numeric:tabular-nums; }
+
+        .center-data-strip { position:fixed; left:50%; transform:translateX(-50%); z-index:6; display:flex; align-items:stretch; border:1px solid var(--border-color); background:rgba(5,9,18,.58); box-shadow:0 0 14px rgba(0,0,0,.24), inset 0 0 12px var(--primary-glow); pointer-events:none; max-width:calc(100vw - 360px); }
+        .top-center-strip { top:22px; }
+        .bottom-center-strip { bottom:56px; }
+        .center-data-cell { min-width:110px; padding:8px 14px; display:grid; align-content:center; gap:4px; border-right:1px solid var(--border-color); flex:1; }
+        .center-data-cell:last-child { border-right:0; }
+        .top-center-strip .center-data-cell { min-width:0; }
+        .top-center-strip .center-data-cell { width:clamp(105px, 13vw, 200px); }
+        .center-data-label { color:rgba(226,241,247,.55); font-size:.52rem; letter-spacing:1.3px; white-space:nowrap; }
+        .center-data-value { color:var(--primary-color); font-size:.72rem; font-weight:bold; letter-spacing:.7px; white-space:nowrap; text-shadow:0 0 8px var(--primary-glow); overflow:hidden; text-overflow:ellipsis; }
+        .gpu-metric-row { margin-bottom:10px; }
+        .gpu-metric-detail { margin-top:4px; color:rgba(226,241,247,.52); font-size:.56rem; letter-spacing:.5px; }
+        @media (max-width:1000px) { .center-data-cell { min-width:88px; padding:7px 9px; } .center-data-label { font-size:.46rem; } .center-data-value { font-size:.62rem; } .top-center-strip .center-data-cell { width:auto; } }
+
+        .center-media { position:fixed; inset:0; z-index:5; pointer-events:none; text-align:center; }
+        .center-media-art { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:clamp(38px, 4vw, 50px); height:clamp(38px, 4vw, 50px); border:1px solid var(--primary-color); border-radius:50%; background:radial-gradient(circle at 35% 30%, rgba(0,243,255,.32), rgba(8,14,28,.92) 68%); box-shadow:0 0 22px var(--primary-glow), inset 0 0 14px rgba(0,0,0,.8); background-position:center; background-size:cover; }
+        .center-media-title { position:absolute; left:50%; top:calc(50% + 29px); transform:translateX(-50%); width:min(210px, 25vw); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:clamp(.52rem, .68vw, .64rem); font-weight:bold; letter-spacing:1px; color:var(--text-color); text-shadow:0 0 8px var(--primary-glow); }
+        .center-media-artist { position:absolute; left:50%; top:calc(50% + 42px); transform:translateX(-50%); width:min(210px, 25vw); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:clamp(.45rem, .56vw, .54rem); letter-spacing:1px; color:var(--primary-color); }
+        .center-media-label { position:absolute; left:50%; top:calc(50% - 39px); transform:translateX(-50%); font-size:.42rem; letter-spacing:1.5px; color:var(--secondary-color); }
+        .center-media-art.media-placeholder { display:grid; place-items:center; color:var(--primary-color); }
+        .center-media-art.media-placeholder::after { content:'♫'; font-size:1.25rem; text-shadow:0 0 10px var(--primary-glow); }
+        .particle-link { position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+        #canvas-container { z-index:2; pointer-events:none; }
+        .scanlines, .vignette { z-index:3; }
+        .hud-overlay { z-index:4; }
+        .setting-readout { color:var(--primary-color); float:right; font-variant-numeric:tabular-nums; }
+        .status-badge, .clock-widget { background:var(--panel-bg); }
+        /* HUD Footer */
+        .hud-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            width: 100%;
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.75rem;
+            letter-spacing: 1.5px;
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 4px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            box-shadow: 0 0 8px var(--primary-color);
+            animation: pulseDot 2s infinite ease-in-out;
+        }
+
+        @keyframes pulseDot {
+            0%, 100% { opacity: 0.3; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Settings Panel Toggle Button */
+        .settings-toggle {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            color: var(--primary-color);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .settings-toggle:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 15px var(--primary-glow);
+            transform: rotate(45deg);
+        }
+
+        /* Settings Drawer Modal */
+        .settings-modal {
+            position:absolute;
+            bottom:52px;
+            right:0;
+            width:330px;
+            max-height:calc(100vh - 120px);
+            overflow-y:auto;
+            background:rgba(6,10,20,.94);
+            border:1px solid var(--primary-color);
+            border-radius:6px;
+            padding:16px;
+            backdrop-filter:blur(12px);
+            box-shadow:0 0 25px rgba(0,0,0,.8), 0 0 10px var(--primary-glow);
+            display:none;
+            flex-direction:column;
+            gap:12px;
+            z-index:10;
+        }
+        .settings-modal.active {
+            display: flex;
+        }
+
+        .settings-header {
+            font-size: 0.85rem;
+            color: var(--primary-color);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .setting-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .setting-item label {
+            font-size: 0.7rem;
+            color: rgba(226, 241, 247, 0.8);
+            letter-spacing: 1px;
+        }
+
+        .setting-readout { float:right; color:var(--primary-color); font-variant-numeric:tabular-nums; }
+
+        .setting-item select, .setting-item input[type="range"] {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 6px;
+            border-radius: 4px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .setting-row input[type="checkbox"] {
+            accent-color: var(--primary-color);
+            cursor: pointer;
+        }
+
+        /* Coordinate Overlay */
+        .coord-display {
+            font-size: 0.65rem;
+            color: rgba(226, 241, 247, 0.4);
+            letter-spacing: 1px;
+        }
+
+        .hidden-widget { display:none !important; }
+    </style>
+</head>
+<body>
+    <!-- Background Audio Visualizer & Particle Canvas -->
+    <div id="canvas-container">
+        <canvas id="hud-canvas"></canvas>
+    <canvas class="particle-link" id="particle-canvas" aria-hidden="true"></canvas>
+    </div>
+    <div id="custom-background" aria-hidden="true"><video id="custom-background-video" muted loop playsinline></video></div>
+
+    <!-- Retro Overlay Details -->
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+
+    <!-- HUD Dynamic Controls & Stats -->
+    <div class="hud-overlay">
+        <!-- Framing Corner Lines -->
+        <div class="corner-bracket top-left"></div>
+        <div class="corner-bracket top-right"></div>
+        <div class="corner-bracket bottom-left"></div>
+        <div class="corner-bracket bottom-right"></div>
+
+        <!-- HUD Header Bar -->
+        <header class="hud-header">
+            <div class="brand-title">
+                <h1>CYBER // CORE v2.4</h1>
+                <span>SYSTEM HUD // AUDIO REACTOR // ENTITY6814</span>
+            </div>
+
+            <div class="clock-widget clock-style-neon" id="clock-widget">
+                <div class="clock-time" id="clock-time">00:00:00</div>
+                <div class="clock-date" id="clock-date">SYS.INIT // OCT 2026</div>
+            </div>
+        </header>
+
+        <div class="center-data-strip top-center-strip" aria-label="Live system summary">
+            <div class="center-data-cell"><span class="center-data-label" id="top-field-1-label">CPU</span><strong class="center-data-value" id="top-field-1-value">--%</strong></div>
+            <div class="center-data-cell"><span class="center-data-label" id="top-field-2-label">GPU</span><strong class="center-data-value" id="top-field-2-value">WAITING</strong></div>
+            <div class="center-data-cell"><span class="center-data-label" id="top-field-3-label">MEMORY</span><strong class="center-data-value" id="top-field-3-value">--%</strong></div>
+        </div>
+        <div hidden aria-hidden="true"><span id="top-cpu">--%</span><span id="top-gpu">WAITING</span><span id="top-memory">--%</span></div>
+
+        <!-- Middle Telemetry Elements -->
+        <main class="hud-middle">
+            <!-- Left Data Panel -->
+            <div class="side-panel" id="hardware-widget">
+                <div class="panel-title">
+                    <span>TELEMETRY</span>
+                    <span style="color: var(--secondary-color);">LIVE</span>
+                </div>
+                
+                <div class="metric-row hidden-widget" id="cpu-row">
+                    <div class="metric-label">
+                    <span id="cpu-label">CPU LOAD</span>
+                        <span id="cpu-val">--</span>
+                    </div>
+                    <div class="metric-bar-bg">
+                        <div class="metric-bar-fill" id="cpu-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <div class="metric-row hidden-widget" id="ram-row">
+                    <div class="metric-label">
+                        <span>MEMORY ALLOC</span>
+                        <span id="ram-val">--%</span>
+                    </div>
+                    <div class="metric-bar-bg">
+                        <div class="metric-bar-fill" id="ram-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <div id="gpu-list"></div>
+                <div class="metric-row hidden-widget" id="disk-row">
+                    <div class="metric-label"><span id="disk-label">DISK LOAD</span><span id="disk-val">--%</span></div>
+                    <div class="metric-bar-bg"><div class="metric-bar-fill" id="disk-bar" style="width: 0%;"></div></div>
+                </div>
+
+                <div class="telemetry-footer">
+                    <div><span>CPU MODEL</span><strong id="cpu-model">AWAITING SYSTEM DATA</strong></div>
+                </div>
+
+                <div class="coord-display" id="coord-readout">
+                    POS: [X: 0000 | Y: 0000]
+                </div>
+            </div>
+
+            <!-- Right Media & Status Panel -->
+            <div class="side-panel">
+                <div class="panel-title">
+                    <span>AUDIO FEED</span>
+                    <span id="audio-status-label" style="color: var(--accent-yellow);">SILENT</span>
+                </div>
+
+                <div class="metric-row">
+                    <div class="metric-label">
+                        <span>SIGNAL SPECTRUM</span>
+                        <span id="audio-peak-val">0.0 dB</span>
+                    </div>
+                    <div class="metric-bar-bg">
+                        <div class="metric-bar-fill" id="audio-peak-bar" style="width: 25%;"></div>
+                    </div>
+                </div>
+                <div class="spectrum-strip" id="spectrum-strip" aria-label="Live audio spectrum"></div>
+                <div class="audio-band-readouts">
+                    <div class="audio-band"><span>BASS</span><strong id="bass-level">0%</strong></div>
+                    <div class="audio-band"><span>MID</span><strong id="mid-level">0%</strong></div>
+                    <div class="audio-band"><span>TREBLE</span><strong id="treble-level">0%</strong></div>
+                </div>
+            </div>
+        </main>
+        <div class="center-data-strip bottom-center-strip" aria-label="Wallpaper session details">
+            <div class="center-data-cell"><span class="center-data-label" id="bottom-field-1-label">SESSION</span><strong class="center-data-value" id="bottom-field-1-value">00:00:00</strong></div>
+            <div class="center-data-cell"><span class="center-data-label" id="bottom-field-2-label">THEME</span><strong class="center-data-value" id="bottom-field-2-value">CYBER CYAN</strong></div>
+            <div class="center-data-cell"><span class="center-data-label" id="bottom-field-3-label">PARTICLES</span><strong class="center-data-value" id="bottom-field-3-value">CONSTELLATION</strong></div>
+        </div>
+        <div hidden aria-hidden="true"><span id="session-runtime">00:00:00</span><span id="active-theme">CYBER CYAN</span><span id="active-particle-mode">CONSTELLATION</span></div>
+        <section class="center-media" id="center-media" aria-label="Now playing">
+            <div class="center-media-label" id="media-state">NOW PLAYING</div>
+            <div class="center-media-art" id="center-media-art"></div>
+            <div class="center-media-title" id="track-title">NO ACTIVE TRANSMISSION</div>
+            <div class="center-media-artist" id="track-artist">WAITING FOR MEDIA</div>
+        </section>
+
+        <!-- HUD Footer Bar -->
+        <footer class="hud-footer">
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                <span>CORE ONLINE</span>
+            </div>
+
+            <!-- Interactive Settings Toggle -->
+            <div style="position: relative;">
+                <button class="settings-toggle interactive" id="settings-btn" title="HUD Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+
+                <!-- Customization Panel -->
+                <div class="settings-modal interactive" id="settings-modal">
+                    <div class="settings-header">
+                        <span>HUD CONFIG</span>
+                        <span id="close-settings" style="cursor:pointer;">✕</span>
+                    </div>
+
+                    <div class="setting-item">
+                        <label for="theme-select">COLOR THEME</label>
+                        <select id="theme-select">
+                            <option value="cyan">Cyber Cyan / Magenta</option>
+                            <option value="amber">Amber / Gold HUD</option>
+                            <option value="emerald">Matrix Emerald</option>
+                            <option value="synthwave">Synthwave Violet</option>
+                            <option value="rgb">RGB Prism</option>
+                            <option value="solar">Solar Gold</option>
+                            <option value="ice">Ice White</option>
+                        </select>
+                    </div>
+
+                    <div class="setting-item">
+                        <label for="audio-sensitivity">AUDIO SENSITIVITY <span class="setting-readout" id="audio-sensitivity-value">1.5×</span></label>
+                        <input type="range" id="audio-sensitivity" min="0.5" max="3" step="0.1" value="1.5">
+                    </div>
+                    <div class="setting-row"><label for="audio-preview-toggle">AUDIO VISUALIZER PREVIEW</label><input type="checkbox" id="audio-preview-toggle" checked></div>
+                    <div class="setting-item"><label for="visualizer-style">VISUALIZER PRESET</label><select id="visualizer-style"><option value="reactor">Reactor Ring</option><option value="wave">Wave Scope</option><option value="hills">Audio Hills</option></select></div>
+                    <div class="setting-row"><label for="visualizer-rotation-toggle">ROTATE VISUALIZER</label><input type="checkbox" id="visualizer-rotation-toggle" checked></div>
+
+                    <div class="setting-item">
+                        <label for="grid-opacity">GRID OPACITY <span class="setting-readout" id="grid-opacity-value">30%</span></label>
+                        <input type="range" id="grid-opacity" min="0.0" max="1.0" step="0.05" value="0.3">
+                    </div>
+                    <div class="setting-item">
+                        <label for="tile-opacity">TILE TRANSPARENCY <span class="setting-readout" id="tile-opacity-value">45%</span></label>
+                        <input type="range" id="tile-opacity" min="0" max="0.9" step="0.05" value="0.45">
+                    </div>
+                    <div class="setting-item"><label for="clock-format">CLOCK FORMAT</label><select id="clock-format"><option value="24">24-hour</option><option value="12">12-hour with AM/PM</option></select></div>
+                    <div class="setting-item"><label for="date-format">DATE FORMAT</label><select id="date-format"><option value="system">Day, Mon DD, YYYY</option><option value="dmy">DD/MM/YYYY</option><option value="mdy">MM/DD/YYYY</option><option value="ymd">YYYY-MM-DD</option><option value="long">DD Mon YYYY</option></select></div>
+                    <div class="setting-item"><label for="clock-style">CLOCK STYLE</label><select id="clock-style"><option value="neon">Neon panel</option><option value="minimal">Minimal</option><option value="terminal">Terminal</option></select></div>
+                    <div class="setting-item"><label for="font-scale">FONT SIZE <span class="setting-readout" id="font-scale-value">100%</span></label><input type="range" id="font-scale" min="0.75" max="1.5" step="0.05" value="1"></div>
+                    <div class="setting-item"><label for="top-field-1">TOP CENTER · SLOT 1</label><select id="top-field-1" class="center-field-select"></select></div>
+                    <div class="setting-item"><label for="top-field-2">TOP CENTER · SLOT 2</label><select id="top-field-2" class="center-field-select"></select></div>
+                    <div class="setting-item"><label for="top-field-3">TOP CENTER · SLOT 3</label><select id="top-field-3" class="center-field-select"></select></div>
+                    <div class="setting-item"><label for="bottom-field-1">BOTTOM CENTER · SLOT 1</label><select id="bottom-field-1" class="center-field-select"></select></div>
+                    <div class="setting-item"><label for="bottom-field-2">BOTTOM CENTER · SLOT 2</label><select id="bottom-field-2" class="center-field-select"></select></div>
+                    <div class="setting-item"><label for="bottom-field-3">BOTTOM CENTER · SLOT 3</label><select id="bottom-field-3" class="center-field-select"></select></div>
+                    <div class="setting-item">
+                        <label for="custom-bg-file">CUSTOM BACKGROUND IMAGE OR VIDEO</label>
+                        <input id="custom-bg-file" type="file" accept="image/*,video/mp4,video/webm,video/ogg">
+                        <button type="button" id="clear-custom-bg">CLEAR CUSTOM BACKGROUND</button>
+                        <span id="custom-bg-status" class="coord-display">NO CUSTOM IMAGE</span>
+                    </div>
+                    <div class="setting-row"><label for="custom-bg-toggle">SHOW CUSTOM BACKGROUND</label><input type="checkbox" id="custom-bg-toggle" checked></div>
+                    <div class="setting-item"><label for="background-opacity">BACKGROUND IMAGE OPACITY <span class="setting-readout" id="background-opacity-value">100%</span></label><input type="range" id="background-opacity" min="0.1" max="1" step="0.05" value="1"></div>
+                    <div class="setting-item hidden-widget" id="video-options">
+                        <label>VIDEO PLAYBACK</label>
+                        <div class="setting-row"><label for="video-audio-toggle">ENABLE VIDEO AUDIO</label><input type="checkbox" id="video-audio-toggle"></div>
+                        <label for="video-volume">VIDEO VOLUME <span class="setting-readout" id="video-volume-value">30%</span></label><input type="range" id="video-volume" min="0" max="1" step="0.05" value="0.3">
+                        <div class="setting-row"><label for="video-loop-toggle">LOOP VIDEO</label><input type="checkbox" id="video-loop-toggle" checked></div>
+                        <div class="setting-row"><label for="video-play-toggle">PLAY VIDEO</label><input type="checkbox" id="video-play-toggle" checked></div>
+                        <label for="video-rate">PLAYBACK SPEED</label><select id="video-rate"><option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+                        <label for="video-fit">VIDEO FIT</label><select id="video-fit"><option value="cover">Cover</option><option value="contain">Contain</option><option value="fill">Stretch to fill</option></select>
+                    </div>
+                    <div class="setting-item"><label for="particle-density">PARTICLE DENSITY <span class="setting-readout" id="particle-density-value">120</span></label><input type="range" id="particle-density" min="40" max="250" step="10" value="120"></div>
+                    <div class="setting-item"><label for="particle-speed">PARTICLE SPEED <span class="setting-readout" id="particle-speed-value">1.0×</span></label><input type="range" id="particle-speed" min="0.2" max="3" step="0.1" value="1"></div>
+                    <div class="setting-item"><label for="particle-mode">PARTICLE MOTION</label><select id="particle-mode"><option value="0">Constellation Network</option><option value="1">Core Singularity</option><option value="2">Hyperdrive Warp</option></select></div>
+                    <div class="setting-item"><label for="particle-interaction">CURSOR INTERACTION</label><select id="particle-interaction"><option value="0">Magnetic Attractor</option><option value="1">Shield Repulsion</option><option value="2">Singularity Follower</option><option value="3">Disabled</option></select></div>
+                    <div class="setting-row">
+                        <label for="parallax-toggle">MOUSE PARALLAX</label>
+                        <input type="checkbox" id="parallax-toggle" checked>
+                    </div>
+                    <div class="setting-row">
+                        <label for="particles-toggle">BACKGROUND PARTICLES</label>
+                        <input type="checkbox" id="particles-toggle" checked>
+                    </div>
+                    <div class="setting-row">
+                        <label for="hardware-toggle">HARDWARE TELEMETRY</label>
+                        <input type="checkbox" id="hardware-toggle" checked>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- JavaScript Engine -->
+    <script>
+        // Configuration & State
+        const config = {
+            theme: 'cyan',
+            audioSensitivity: 1.5,
+            showAudioPreview: true,
+            visualizerStyle: 'reactor',
+            rotateVisualizer: true,
+            gridOpacity: 0.3,
+            tileOpacity: 0.45,
+            clockFormat: '24',
+            dateFormat: 'system',
+            clockStyle: 'neon',
+            fontScale: 1,
+            topFields: ['cpu','gpu','memory'],
+            bottomFields: ['session','theme','particles'],
+            backgroundOpacity: 1,
+            customBgEnabled: true,
+            videoAudio: false,
+            videoVolume: 0.3,
+            videoLoop: true,
+            videoPlay: true,
+            videoRate: 1,
+            videoFit: 'cover',
+            enableParallax: true,
+            enableParticles: true,
+            showMediaWidget: true,
+            showHardwareWidget: true,
+            particleCount: 120,
+            particleSpeed: 1,
+            particleMode: 0,
+            particleInteraction: 0,
+            schemeIndex: 0,
+            primaryColor: '#00f3ff',
+            secondaryColor: '#ff0055',
+            primaryGlow: 'rgba(0, 243, 255, 0.4)',
+            secondaryGlow: 'rgba(255, 0, 85, 0.4)'
+        };
+        const wallpaperSessionStart = Date.now();
+        const centerFieldChoices = [
+            ['cpu','CPU load'], ['gpu','GPU load'], ['memory','Memory'],
+            ['audio','Audio level'], ['track','Track / artist'], ['clock','Clock'], ['date','Date'],
+            ['session','Session time'], ['theme','Color theme'], ['particles','Particle mode'], ['empty','Empty']
+        ];
+        const customBackgroundEl = document.getElementById('custom-background');
+
+        function getCenterField(field) {
+            const values = {
+                cpu: ['PROCESSOR', document.getElementById('top-cpu').textContent],
+                gpu: ['GRAPHICS', document.getElementById('top-gpu').textContent],
+                memory: ['MEMORY', document.getElementById('top-memory').textContent],
+                audio: ['AUDIO PEAK', document.getElementById('audio-peak-val').textContent],
+                track: ['NOW PLAYING', document.getElementById('track-title').textContent],
+                clock: ['LOCAL TIME', document.getElementById('clock-time').textContent],
+                date: ['SYSTEM DATE', document.getElementById('clock-date').textContent.replace(/^SYS\.DATE \/\/ /, '')],
+                session: ['WALLPAPER SESSION', document.getElementById('session-runtime').textContent],
+                theme: ['COLOR PROFILE', document.getElementById('active-theme').textContent],
+                particles: ['PARTICLE FIELD', document.getElementById('active-particle-mode').textContent],
+                empty: ['', '']
+            };
+            return values[field] || values.empty;
+        }
+        function refreshCenterFields() {
+            for (const strip of ['top','bottom']) {
+                const fields = config[`${strip}Fields`];
+                fields.forEach((field, index) => {
+                    const [label, value] = getCenterField(field);
+                    document.getElementById(`${strip}-field-${index + 1}-label`).textContent = label;
+                    document.getElementById(`${strip}-field-${index + 1}-value`).textContent = value;
+                });
+            }
+        }
+        const customBackgroundVideo = document.getElementById('custom-background-video');
+        let customBackgroundUrl = '';
+        let customBackgroundKind = '';
+        function syncCustomBackgroundVisibility() {
+            const visible = Boolean(customBackgroundUrl) && config.customBgEnabled;
+            customBackgroundEl.style.opacity = String(config.backgroundOpacity);
+            customBackgroundEl.style.display = visible ? 'block' : 'none';
+            if (customBackgroundKind === 'video') {
+                if (visible && config.videoPlay) customBackgroundVideo.play().catch(()=>{});
+                else customBackgroundVideo.pause();
+            }
+        }
+        function syncVideoSettings() {
+            customBackgroundVideo.muted = !config.videoAudio;
+            customBackgroundVideo.volume = config.videoVolume;
+            customBackgroundVideo.loop = config.videoLoop;
+            customBackgroundVideo.playbackRate = config.videoRate;
+            customBackgroundVideo.style.objectFit = config.videoFit;
+            document.getElementById('video-options').classList.toggle('hidden-widget', customBackgroundKind !== 'video');
+            document.getElementById('video-audio-toggle').checked = config.videoAudio;
+            document.getElementById('video-volume').value = config.videoVolume;
+            document.getElementById('video-volume-value').textContent = `${Math.round(config.videoVolume*100)}%`;
+            document.getElementById('video-loop-toggle').checked = config.videoLoop;
+            document.getElementById('video-play-toggle').checked = config.videoPlay;
+            document.getElementById('video-rate').value = String(config.videoRate);
+            document.getElementById('video-fit').value = config.videoFit;
+            syncCustomBackgroundVisibility();
+        }
+        function applyCustomBackgroundAsset(asset) {
+            if (customBackgroundUrl.startsWith('blob:')) URL.revokeObjectURL(customBackgroundUrl);
+            customBackgroundUrl = asset?.blob ? URL.createObjectURL(asset.blob) : (asset?.dataUrl || '');
+            customBackgroundKind = asset?.kind || 'image';
+            customBackgroundVideo.pause();
+            customBackgroundVideo.removeAttribute('src');
+            customBackgroundVideo.load();
+            customBackgroundEl.style.backgroundImage = '';
+            customBackgroundVideo.style.display = 'none';
+            if (customBackgroundUrl && customBackgroundKind === 'video') {
+                customBackgroundVideo.src = customBackgroundUrl;
+                customBackgroundVideo.style.display = 'block';
+            } else if (customBackgroundUrl) {
+                customBackgroundEl.style.backgroundImage = `url("${customBackgroundUrl}")`;
+            }
+            syncVideoSettings();
+            syncCustomBackgroundVisibility();
+        }
+        function openBackgroundDatabase() {
+            return new Promise((resolve,reject)=>{
+                if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+                const request=indexedDB.open('CyberpunkCoreAssets',1);
+                request.onupgradeneeded=()=>{ if(!request.result.objectStoreNames.contains('backgrounds')) request.result.createObjectStore('backgrounds'); };
+                request.onsuccess=()=>resolve(request.result);
+                request.onerror=()=>reject(request.error);
+            });
+        }
+        async function saveCustomBackgroundAsset(asset) {
+            const db=await openBackgroundDatabase();
+            await new Promise((resolve,reject)=>{ const tx=db.transaction('backgrounds','readwrite'); tx.objectStore('backgrounds').put(asset,'active'); tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); });
+            db.close();
+        }
+        async function loadCustomBackgroundAsset() {
+            try {
+                const db=await openBackgroundDatabase();
+                const asset=await new Promise((resolve,reject)=>{ const request=db.transaction('backgrounds','readonly').objectStore('backgrounds').get('active'); request.onsuccess=()=>resolve(request.result||null); request.onerror=()=>reject(request.error); });
+                db.close();
+                if(asset) return asset;
+            } catch {}
+            const legacy=getSavedCustomBackground();
+            return legacy ? {kind:'image',dataUrl:legacy} : null;
+        }
+        async function clearSavedCustomBackground() {
+            try { localStorage.removeItem('cyberpunk-core-custom-background'); } catch {}
+            try { const db=await openBackgroundDatabase(); await new Promise(resolve=>{const tx=db.transaction('backgrounds','readwrite');tx.objectStore('backgrounds').delete('active');tx.oncomplete=resolve;tx.onerror=resolve;}); db.close(); } catch {}
+        }
+        function getSavedCustomBackground() {
+            try { return localStorage.getItem('cyberpunk-core-custom-background') || ''; } catch { return ''; }
+        }
+
+        // DOM Element Caching
+        const canvas = document.getElementById('hud-canvas');
+        const ctx = canvas.getContext('2d');
+        const particleCanvas = document.getElementById('particle-canvas');
+        const particleCtx = particleCanvas.getContext('2d');
+        const clockTimeEl = document.getElementById('clock-time');
+        const clockDateEl = document.getElementById('clock-date');
+        const coordReadoutEl = document.getElementById('coord-readout');
+        const audioStatusLabel = document.getElementById('audio-status-label');
+        const audioPeakVal = document.getElementById('audio-peak-val');
+        const audioPeakBar = document.getElementById('audio-peak-bar');
+        const trackTitleEl = document.getElementById('track-title');
+        const trackArtistEl = document.getElementById('track-artist');
+        const mediaArtEl = document.getElementById('center-media-art');
+        const mediaStateEl = document.getElementById('media-state');
+        let lastSystemData = {};
+        const spectrumStrip = document.getElementById('spectrum-strip');
+        spectrumStrip.innerHTML = '<i></i>'.repeat(18);
+        const spectrumBars = [...spectrumStrip.children];
+        let lastAudioPanelUpdate = 0;
+
+        // Mouse Parallax Trackers
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetMouseX = 0;
+        let targetMouseY = 0;
+
+        // Audio Frequency Array (128 bands standard for Lively)
+        let audioData = new Array(128).fill(0);
+        let hasActiveAudio = false;
+        let lastAudioTime = 0;
+
+        // Color Themes Map
+        const colorThemes = {
+            rgb: { primary: '#00e5ff', secondary: '#ff2a6d', primaryGlow: 'rgba(0,229,255,.42)', secondaryGlow: 'rgba(255,42,109,.42)' },
+            solar: { primary: '#ffaa00', secondary: '#ff5500', primaryGlow: 'rgba(255,170,0,.42)', secondaryGlow: 'rgba(255,85,0,.38)' },
+            ice: { primary: '#ffffff', secondary: '#a9d6e5', primaryGlow: 'rgba(216,243,220,.36)', secondaryGlow: 'rgba(169,214,229,.35)' },
+            cyan: {
+                primary: '#00f3ff',
+                secondary: '#ff0055',
+                primaryGlow: 'rgba(0, 243, 255, 0.4)',
+                secondaryGlow: 'rgba(255, 0, 85, 0.4)'
+            },
+            amber: {
+                primary: '#fcee0a',
+                secondary: '#ff6600',
+                primaryGlow: 'rgba(252, 238, 10, 0.4)',
+                secondaryGlow: 'rgba(255, 102, 0, 0.4)'
+            },
+            emerald: {
+                primary: '#00ff66',
+                secondary: '#00ffff',
+                primaryGlow: 'rgba(0, 255, 102, 0.4)',
+                secondaryGlow: 'rgba(0, 255, 255, 0.4)'
+            },
+            synthwave: {
+                primary: '#bf00ff',
+                secondary: '#00f3ff',
+                primaryGlow: 'rgba(191, 0, 255, 0.4)',
+                secondaryGlow: 'rgba(0, 243, 255, 0.4)'
+            }
+        };
+
+        let particles = [];
+        let particleShockwaves = [];
+        const particlePalette = [
+            ['#00f2fe', '#ff0080', '#ffffff', '#7b2cbf'],
+            ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff'],
+            ['#9d4edd', '#c77dff', '#e0aaff', '#5a189a'],
+            ['#00ff66', '#00cc44', '#80ffaa', '#ffffff'],
+            ['#ffaa00', '#ff5500', '#ffea00', '#ffffff'],
+            ['#ffffff', '#d8f3dc', '#b7e4c7', '#a9d6e5']
+        ];
+        const particleConnectionDistance = 145;
+        const particlePadding = 90;
+        const particleMouse = { x: 0, y: 0, active: false, idleTimer: 0, radius: 180 };
+
+        function particleColor() {
+            const colors = particlePalette[config.schemeIndex] || particlePalette[0];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        function syncParticleCount() {
+            const target = Math.max(40, Math.min(250, Math.round(config.particleCount / 10) * 10));
+            while (particles.length < target) particles.push(new Particle(canvas.width, canvas.height));
+            if (particles.length > target) particles.length = target;
+            document.getElementById('particle-density-value').textContent = String(target);
+        }
+
+        function resizeParticleCanvas() {
+            const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+            particleCanvas.width = Math.round(window.innerWidth * dpr);
+            particleCanvas.height = Math.round(window.innerHeight * dpr);
+            particleCanvas.style.width = `${window.innerWidth}px`;
+            particleCanvas.style.height = `${window.innerHeight}px`;
+            particleCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            if (!particleMouse.active) {
+                particleMouse.x = window.innerWidth / 2;
+                particleMouse.y = window.innerHeight / 2;
+            }
+            syncParticleCount();
+        }
+
+        function drawParticleNetwork() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            particleCtx.clearRect(0, 0, w, h);
+            if (!config.enableParticles) return;
+
+            const cx = w / 2;
+            const cy = h / 2;
+            const mode = config.particleMode;
+            if (particleMouse.active && config.particleInteraction === 2 && mode === 1) {
+                const core = particleCtx.createRadialGradient(particleMouse.x, particleMouse.y, 4, particleMouse.x, particleMouse.y, 110);
+                core.addColorStop(0, 'rgba(0,0,0,.9)');
+                core.addColorStop(.75, 'rgba(0,0,0,.55)');
+                core.addColorStop(1, 'transparent');
+                particleCtx.fillStyle = core;
+                particleCtx.fillRect(particleMouse.x - 112, particleMouse.y - 112, 224, 224);
+            }
+
+            if (mode === 0) {
+                particleCtx.lineWidth = .7;
+                for (let i = 0; i < particles.length; i++) {
+                    const a = particles[i];
+                    const ax = a.x + cx, ay = a.y + cy;
+                    for (let j = i + 1; j < particles.length; j++) {
+                        const b = particles[j];
+                        const dx = a.x - b.x, dy = a.y - b.y;
+                        const d2 = dx * dx + dy * dy;
+                        if (d2 < particleConnectionDistance * particleConnectionDistance) {
+                            const alpha = (1 - Math.sqrt(d2) / particleConnectionDistance) * .28;
+                            particleCtx.globalAlpha = alpha;
+                            particleCtx.strokeStyle = a.color;
+                            particleCtx.beginPath();
+                            particleCtx.moveTo(ax, ay);
+                            particleCtx.lineTo(b.x + cx, b.y + cy);
+                            particleCtx.stroke();
+                        }
+                    }
+                }
+                particleCtx.globalAlpha = 1;
+            }
+
+            for (let i = particleShockwaves.length - 1; i >= 0; i--) {
+                const wave = particleShockwaves[i];
+                wave.radius += 4.4 * config.particleSpeed;
+                wave.alpha -= .026 * config.particleSpeed;
+                if (wave.alpha <= 0) { particleShockwaves.splice(i, 1); continue; }
+                particleCtx.beginPath();
+                particleCtx.arc(wave.x, wave.y, wave.radius, 0, Math.PI * 2);
+                particleCtx.strokeStyle = wave.color;
+                particleCtx.globalAlpha = wave.alpha;
+                particleCtx.lineWidth = 1.6;
+                particleCtx.stroke();
+            }
+            particleCtx.globalAlpha = 1;
+
+            particles.forEach(p => {
+                p.update(w, h, mode);
+                p.draw(particleCtx, w, h, mode);
+            });
+        }
+
+        class Particle {
+            constructor(w, h) { this.reset(w, h, true); }
+            reset(w, h, initial = false) {
+                this.x = (Math.random() - .5) * (w + particlePadding * 2);
+                this.y = (Math.random() - .5) * (h + particlePadding * 2);
+                this.z = Math.random() * Math.max(w, h) + 50;
+                const angle = Math.atan2(-this.y, -this.x) + (Math.random() - .5) * .8;
+                const speed = Math.random() * .65 + .25;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.size = Math.random() * 1.7 + .55;
+                this.alpha = Math.random() * .42 + .38;
+                this.orbitRadius = Math.random() * 40 + 35;
+                this.color = particleColor();
+                if (!initial && config.particleMode === 2) this.z = Math.max(w, h);
+            }
+            update(w, h, mode) {
+                const cx=w/2, cy=h/2;
+                const mx=particleMouse.active ? particleMouse.x-cx : 0;
+                const my=particleMouse.active ? particleMouse.y-cy : 0;
+                if (particleMouse.active && config.particleInteraction !== 3) {
+                    const dx=particleMouse.x-(this.x+cx), dy=particleMouse.y-(this.y+cy);
+                    const dist=Math.hypot(dx,dy);
+                    if (dist < particleMouse.radius && dist > 0) {
+                        const force=(1-dist/particleMouse.radius)*config.particleSpeed;
+                        if (config.particleInteraction === 0) {
+                            if (dist > this.orbitRadius) { this.x += dx/dist*force*1.8; this.y += dy/dist*force*1.8; }
+                            else { this.x += dy/dist*force; this.y -= dx/dist*force; }
+                        } else if (config.particleInteraction === 1) {
+                            this.x -= dx/dist*force*2.8; this.y -= dy/dist*force*2.8;
+                        }
+                    }
+                }
+                if (mode === 0) {
+                    this.x += this.vx*config.particleSpeed; this.y += this.vy*config.particleSpeed;
+                    if (this.x < -cx-particlePadding) this.x=cx+particlePadding;
+                    if (this.x > cx+particlePadding) this.x=-cx-particlePadding;
+                    if (this.y < -cy-particlePadding) this.y=cy+particlePadding;
+                    if (this.y > cy+particlePadding) this.y=-cy-particlePadding;
+                } else if (mode === 1) {
+                    const tx=particleMouse.active && config.particleInteraction===2 ? mx : 0;
+                    const ty=particleMouse.active && config.particleInteraction===2 ? my : 0;
+                    const dx=tx-this.x, dy=ty-this.y, dist=Math.hypot(dx,dy)||1;
+                    const pull=Math.max(.16, 1-dist/(Math.max(w,h)*.72))*1.2*config.particleSpeed;
+                    this.x += (dx/dist*.72 + dy/dist*.62)*pull;
+                    this.y += (dy/dist*.72 - dx/dist*.62)*pull;
+                    if (dist < 25) this.reset(w,h,false);
+                } else {
+                    this.z -= 7.5*config.particleSpeed;
+                    if (this.z <= 0) this.reset(w,h,false);
+                }
+            }
+            draw(context,w,h,mode) {
+                let px=this.x+w/2, py=this.y+h/2, radius=this.size;
+                if (mode === 2) {
+                    const k=260/Math.max(1,this.z), pk=260/Math.max(1,this.z+16*config.particleSpeed);
+                    px=this.x*k+w/2; py=this.y*k+h/2;
+                    if (px < -particlePadding || px > w+particlePadding || py < -particlePadding || py > h+particlePadding) return;
+                    context.beginPath(); context.moveTo(px,py); context.lineTo(this.x*pk+w/2,this.y*pk+h/2);
+                    context.strokeStyle=this.color; context.globalAlpha=this.alpha; context.lineWidth=Math.max(.7,this.size*k); context.stroke(); context.globalAlpha=1; return;
+                }
+                if (px < -particlePadding || px > w+particlePadding || py < -particlePadding || py > h+particlePadding) return;
+                context.beginPath(); context.arc(px,py,radius,0,Math.PI*2); context.fillStyle=this.color; context.globalAlpha=this.alpha; context.fill(); context.globalAlpha=1;
+            }
+        }
+
+        function updateSettingReadouts() {
+            document.getElementById('audio-sensitivity-value').textContent = `${Number(config.audioSensitivity).toFixed(1)}×`;
+            document.getElementById('grid-opacity-value').textContent = `${Math.round(config.gridOpacity*100)}%`;
+            document.getElementById('particle-speed-value').textContent = `${Number(config.particleSpeed).toFixed(1)}×`;
+            document.getElementById('particle-density-value').textContent = String(config.particleCount);
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('resize', resizeParticleCanvas);
+        resizeCanvas();
+        resizeParticleCanvas();
+        syncParticleCount();
+
+        // Update Real-Time Clock & Date
+        function updateClock() {
+            const now = new Date();
+            clockTimeEl.textContent = now.toLocaleTimeString('en-US', { hour12: config.clockFormat === '12', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateFormats = {
+                system: now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' }),
+                dmy: `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`,
+                mdy: `${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}/${now.getFullYear()}`,
+                ymd: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
+                long: `${String(now.getDate()).padStart(2, '0')} ${now.toLocaleDateString('en-US', { month: 'short' })} ${now.getFullYear()}`
+            };
+            clockDateEl.textContent = `SYS.DATE // ${dateFormats[config.dateFormat] || dateFormats.system}`.toUpperCase();
+            const elapsed = Math.floor((Date.now() - wallpaperSessionStart) / 1000);
+            const hoursElapsed = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+            const minutesElapsed = String(Math.floor(elapsed / 60) % 60).padStart(2, '0');
+            const secondsElapsed = String(elapsed % 60).padStart(2, '0');
+            document.getElementById('session-runtime').textContent = `${hoursElapsed}:${minutesElapsed}:${secondsElapsed}`;
+            refreshCenterFields();
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Hardware metrics are updated only from Lively system telemetry.
+
+        // Render Parallax Grid Background
+        function drawGrid(offsetX, offsetY) {
+            ctx.save();
+            ctx.strokeStyle = config.primaryColor;
+            ctx.globalAlpha = config.gridOpacity;
+            ctx.lineWidth = 1;
+
+            const gridSize = 60;
+            const width = canvas.width;
+            const height = canvas.height;
+
+            const startX = (offsetX % gridSize) - gridSize;
+            const startY = (offsetY % gridSize) - gridSize;
+
+            for (let x = startX; x < width + gridSize; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+            }
+
+            for (let y = startY; y < height + gridSize; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // Draw Centerpiece Audio-Reactive HUD Ring
+        function drawCenterReactor(centerX, centerY, activeAudio, time, hasSignal) {
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            const baseRadius = Math.min(canvas.width, canvas.height) * 0.16;
+
+            // 1. Outer Static Reticle Ring
+            ctx.strokeStyle = config.primaryColor;
+            ctx.globalAlpha = 0.3;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, baseRadius * 1.35, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 2. Rotating Dash Ring
+            ctx.save();
+            ctx.rotate(config.rotateVisualizer ? time * 0.0005 : 0);
+            ctx.setLineDash([12, 18]);
+            ctx.strokeStyle = config.secondaryColor;
+            ctx.globalAlpha = 0.6;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, baseRadius * 1.25, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+
+            // 3. Counter-Rotating Inner Ring
+            ctx.save();
+            ctx.rotate(config.rotateVisualizer ? -time * 0.0008 : 0);
+            ctx.setLineDash([6, 12]);
+            ctx.strokeStyle = config.primaryColor;
+            ctx.globalAlpha = 0.5;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, baseRadius * 0.82, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+
+            // Audio preview styles use only live frequency data. Silence leaves the dial static.
+            const numBars = 64; // Sample down for aesthetic density
+            const angleStep = (Math.PI * 2) / numBars;
+            let peakSum = 0;
+            for (let i=0;i<numBars;i++) peakSum += (activeAudio[i]||0)*config.audioSensitivity;
+
+            if (hasSignal && config.visualizerStyle === 'reactor') {
+                for (let i = 0; i < numBars; i++) {
+                    const audioVal = (activeAudio[i] || 0) * config.audioSensitivity;
+                    const barHeight = audioVal * (baseRadius * 0.65);
+                    if (barHeight < 0.5) continue;
+                    const angle = i * angleStep;
+                    const innerX = Math.cos(angle) * baseRadius;
+                    const innerY = Math.sin(angle) * baseRadius;
+                    const outerX = Math.cos(angle) * (baseRadius + barHeight);
+                    const outerY = Math.sin(angle) * (baseRadius + barHeight);
+                    ctx.strokeStyle = i % 2 === 0 ? config.primaryColor : config.secondaryColor;
+                    ctx.lineWidth = 3;
+                    ctx.globalAlpha = 0.85;
+                    ctx.beginPath(); ctx.moveTo(innerX, innerY); ctx.lineTo(outerX, outerY); ctx.stroke();
+                    ctx.fillStyle = config.primaryColor; ctx.globalAlpha = 0.9;
+                    ctx.beginPath(); ctx.arc(outerX, outerY, 1.5, 0, Math.PI * 2); ctx.fill();
+                }
+            } else if (hasSignal && config.visualizerStyle === 'wave') {
+                ctx.lineWidth=2.2; ctx.strokeStyle=config.primaryColor; ctx.globalAlpha=.92; ctx.beginPath();
+                for(let i=0;i<=numBars;i++) { const a=i*angleStep; const amp=(activeAudio[i%numBars]||0)*config.audioSensitivity; const r=baseRadius*.88+amp*baseRadius*.72; const x=Math.cos(a)*r,y=Math.sin(a)*r; if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); }
+                ctx.closePath(); ctx.stroke();
+                ctx.lineWidth=1; ctx.strokeStyle=config.secondaryColor; ctx.globalAlpha=.58; ctx.beginPath();
+                for(let i=0;i<=numBars;i++) { const a=i*angleStep; const amp=(activeAudio[i%numBars]||0)*config.audioSensitivity; const r=baseRadius*.88-amp*baseRadius*.32; const x=Math.cos(a)*r,y=Math.sin(a)*r; if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); }
+                ctx.closePath(); ctx.stroke();
+            } else if (hasSignal && config.visualizerStyle === 'hills') {
+                ctx.beginPath();
+                for(let i=0;i<=numBars;i++) { const a=i*angleStep; const x=Math.cos(a)*baseRadius*.72,y=Math.sin(a)*baseRadius*.72; if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y); }
+                for(let i=numBars;i>=0;i--) { const a=i*angleStep; const amp=(activeAudio[i%numBars]||0)*config.audioSensitivity; const r=baseRadius*.72+amp*baseRadius*.9; ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r); }
+                ctx.closePath(); ctx.fillStyle=config.primaryColor; ctx.globalAlpha=.28; ctx.fill();
+                ctx.strokeStyle=config.secondaryColor; ctx.lineWidth=1.5; ctx.globalAlpha=.9; ctx.stroke();
+            }
+
+            // Update Audio Peak Metric UI Bar
+            const avgPeak = Math.min(100, Math.floor((peakSum / numBars) * 120));
+            audioPeakBar.style.width = `${hasSignal ? avgPeak : 0}%`;
+            audioPeakVal.textContent = hasSignal ? `${(avgPeak * 0.6 - 30).toFixed(1)} dB` : 'SILENT';
+
+            // 5. Pulsing Reactor Core Center
+            const coreGlow = hasSignal ? (peakSum / numBars) * 0.5 + 0.5 : 0;
+            ctx.fillStyle = config.primaryColor;
+            ctx.globalAlpha = 0.2 * coreGlow;
+            ctx.beginPath();
+            ctx.arc(0, 0, baseRadius * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Core Symbol
+            ctx.strokeStyle = config.primaryColor;
+            ctx.globalAlpha = 0.8;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, baseRadius * 0.25, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function updateAudioPanel(audio, timestamp, hasSignal) {
+            if (timestamp - lastAudioPanelUpdate < 90) return;
+            lastAudioPanelUpdate = timestamp;
+            const bands = [[0, 12], [12, 48], [48, audio.length]];
+            const ids = ['bass-level', 'mid-level', 'treble-level'];
+            bands.forEach(([start, end], band) => {
+                const values = audio.slice(start, Math.max(start + 1, end));
+                const mean = values.reduce((sum, n) => sum + Math.max(0, Number(n) || 0), 0) / Math.max(1, values.length);
+                document.getElementById(ids[band]).textContent = `${hasSignal ? Math.min(100, Math.round(mean * config.audioSensitivity * 100)) : 0}%`;
+            });
+            spectrumBars.forEach((bar, i) => {
+                const index = Math.floor(i * audio.length / spectrumBars.length);
+                const level = Math.max(0, Math.min(1, (Number(audio[index]) || 0) * config.audioSensitivity));
+                bar.style.height = `${hasSignal ? 3 + level * 34 : 0}px`;
+                bar.style.opacity = `${hasSignal ? .35 + level * .65 : 0}`;
+            });
+        }
+
+        // Main Animation Loop
+        function animate(timestamp) {
+            // Smooth Parallax Interpolation
+            mouseX += (targetMouseX - mouseX) * 0.05;
+            mouseY += (targetMouseY - mouseY) * 0.05;
+
+            const parallaxX = config.enableParallax ? (mouseX - canvas.width / 2) * 0.03 : 0;
+            const parallaxY = config.enableParallax ? (mouseY - canvas.height / 2) * 0.03 : 0;
+
+            // Clear Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Draw Parallax Grid Background
+            drawGrid(parallaxX, parallaxY);
+
+            // 2. Render Particles System
+            if (config.enableParticles) {
+                drawParticleNetwork();
+            } else {
+                particleCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            }
+
+            // Never synthesize standby audio: only a recent Lively spectrum can animate the preview.
+            if (timestamp - lastAudioTime > 500) {
+                hasActiveAudio = false;
+                audioData = new Array(128).fill(0);
+            }
+            const currentAudio = hasActiveAudio ? audioData : new Array(128).fill(0);
+            if (hasActiveAudio) {
+                audioStatusLabel.textContent = "LIVE STREAM";
+                audioStatusLabel.style.color = "var(--primary-color)";
+            } else {
+                audioStatusLabel.textContent = "SILENT";
+                audioStatusLabel.style.color = "var(--accent-yellow)";
+            }
+            updateAudioPanel(currentAudio, timestamp, hasActiveAudio);
+
+            // 4. Draw Central Audio HUD Reactor
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            if (config.showAudioPreview) drawCenterReactor(centerX, centerY, currentAudio, timestamp, hasActiveAudio);
+
+            requestAnimationFrame(animate);
+        }
+
+        // Start Loop on Window Load
+        window.onload = function() {
+            requestAnimationFrame(animate);
+        };
+
+        /**
+         * LIVELY WALLPAPER AUDIO API INTEGRATION
+         * Lively passes an array of 128 audio frequency floats normalized between 0.0 and 1.0.
+         */
+        function livelyAudioListener(audioArray) {
+            if (!audioArray || audioArray.length === 0) { hasActiveAudio = false; audioData = new Array(128).fill(0); return; }
+
+            const incoming = Array.from(audioArray, n => Math.max(0, Number(n) || 0));
+            const peak = Math.max(0, ...incoming);
+            const sum = incoming.reduce((total,value)=>total+value,0);
+            hasActiveAudio = sum > 0.01 && peak > 0.015;
+            audioData = hasActiveAudio ? incoming : new Array(128).fill(0);
+            lastAudioTime = performance.now();
+        }
+
+        const readMetric = (data, keys) => {
+            for (const key of keys) if (data[key] !== undefined && data[key] !== null && Number.isFinite(Number(data[key]))) return Math.max(0, Math.min(100, Number(data[key])));
+            return null;
+        };
+        function paintMetric(value, textId, barId) {
+            if (value === null) return;
+            document.getElementById(textId).textContent = `${Math.round(value)}%`;
+            document.getElementById(barId).style.width = `${value}%`;
+        }
+        function namedArray(data, keys) {
+            for (const key of keys) if (Array.isArray(data[key])) return data[key];
+            return [];
+        }
+        function readCounter(data, keys) {
+            for (const key of keys) {
+                if (data?.[key] !== undefined && data[key] !== null && Number.isFinite(Number(data[key]))) return Math.max(0, Number(data[key]));
+            }
+            return null;
+        }
+        function gpuMemoryMb(gpu, kind, suffix = '') {
+            const usedKeys = ['VramUsedMB','VRAMUsedMB','DedicatedMemoryUsedMB','DedicatedVideoMemoryUsedMB'];
+            const totalKeys = ['VramTotalMB','VRAMTotalMB','DedicatedMemoryTotalMB','DedicatedVideoMemoryTotalMB'];
+            const bytesKeys = kind === 'used'
+                ? ['VramUsedBytes','VRAMUsedBytes','DedicatedMemoryUsedBytes','DedicatedVideoMemoryUsedBytes']
+                : ['VramTotalBytes','VRAMTotalBytes','DedicatedMemoryTotalBytes','DedicatedVideoMemoryTotalBytes'];
+            const mb = readCounter(gpu, (kind === 'used' ? usedKeys : totalKeys).flatMap(key => suffix ? [`${key}${suffix}`, key] : [key]));
+            if (mb !== null) return mb;
+            const bytes = readCounter(gpu, bytesKeys.flatMap(key => suffix ? [`${key}${suffix}`, key] : [key]));
+            return bytes === null ? null : bytes / (1024 * 1024);
+        }
+        function extractGpuMetrics(data) {
+            const list = namedArray(data, ['Gpus','GPUs','gpus','GraphicsAdapters','graphicsAdapters']);
+            const arrayGpus = list.filter(gpu => gpu && typeof gpu === 'object').map((gpu, index) => ({
+                    name: gpu.Name || gpu.NameGpu || gpu.GpuName || `GPU ${index + 1}`,
+                    usage: readMetric(gpu, ['CurrentGpu3D','GpuUsage','Usage','Load','Utilization','CurrentGpu']),
+                    vramUsed: gpuMemoryMb(gpu, 'used'),
+                    vramTotal: gpuMemoryMb(gpu, 'total')
+                }));
+            const indexed = [...new Set(Object.keys(data).map(key => key.match(/^(?:NameGpu|GpuName|CurrentGpu3D|GpuUsage|CurrentGpu)(\d+)$/i)?.[1]).filter(Boolean))].sort((a,b) => Number(a)-Number(b));
+            if (indexed.length) {
+                const indexedGpus = indexed.map((index, i) => ({
+                    name: data[`NameGpu${index}`] || data[`GpuName${index}`] || `GPU ${i + 1}`,
+                    usage: readMetric(data, [`CurrentGpu3D${index}`,`GpuUsage${index}`,`CurrentGpu${index}`]),
+                    vramUsed: gpuMemoryMb(data, 'used', index),
+                    vramTotal: gpuMemoryMb(data, 'total', index)
+                }));
+                return [...arrayGpus, ...indexedGpus];
+            }
+            if (arrayGpus.length) return arrayGpus;
+            const usage = readMetric(data, ['CurrentGpu3D','GpuUsage','gpuUsage','GPUUsage']);
+            return usage === null && !data.NameGpu ? [] : [{
+                name: data.NameGpu || 'GPU reported by Lively',
+                usage,
+                vramUsed: gpuMemoryMb(data, 'used'),
+                vramTotal: gpuMemoryMb(data, 'total')
+            }];
+        }
+        function renderGpuMetrics(gpus) {
+            const container = document.getElementById('gpu-list');
+            container.replaceChildren();
+            gpus.forEach((gpu, index) => {
+                const row = document.createElement('div');
+                row.className = 'metric-row gpu-metric-row';
+                const label = document.createElement('div');
+                label.className = 'metric-label';
+                const name = document.createElement('span');
+                const role = /\b(?:UHD|Iris|Vega\s*\d|Xe Graphics)\b/i.test(gpu.name) ? 'IGPU' : /\b(?:NVIDIA|GeForce|RTX|Quadro|Radeon RX|Arc A\d)\b/i.test(gpu.name) ? 'DGPU' : `GPU ${index + 1}`;
+                name.textContent = `${role} // ${gpu.name}`;
+                name.title = gpu.name;
+                const value = document.createElement('span');
+                value.textContent = gpu.usage === null ? 'LOAD N/A' : `${gpu.usage.toFixed(1)}%`;
+                label.append(name, value);
+                row.append(label);
+                if (gpu.usage !== null) {
+                    const bar = document.createElement('div');
+                    bar.className = 'metric-bar-bg';
+                    const fill = document.createElement('div');
+                    fill.className = 'metric-bar-fill';
+                    fill.style.width = `${gpu.usage}%`;
+                    bar.append(fill);
+                    row.append(bar);
+                }
+                const vram = document.createElement('div');
+                vram.className = 'gpu-metric-detail';
+                if (gpu.vramUsed !== null && gpu.vramTotal !== null) vram.textContent = `VRAM ${gpu.vramUsed.toFixed(0)} / ${gpu.vramTotal.toFixed(0)} MB`;
+                else if (gpu.vramTotal !== null) vram.textContent = `VRAM ${gpu.vramTotal.toFixed(0)} MB`;
+                else vram.textContent = 'VRAM DATA UNAVAILABLE';
+                row.append(vram);
+                container.append(row);
+            });
+            const activeGpus = gpus.filter(gpu => gpu.usage !== null);
+            const peak = activeGpus.length ? Math.max(...activeGpus.map(gpu => gpu.usage)).toFixed(0) : null;
+            document.getElementById('top-gpu').textContent = gpus.length ? `${gpus.length} GPU${gpus.length === 1 ? '' : 'S'}${peak === null ? '' : ` // ${peak}%`}` : 'NOT REPORTED';
+        }
+        function livelySystemInformation(data) {
+            if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
+            if (!data || typeof data !== 'object') return;
+            lastSystemData = data;
+            const cpuUsage = readMetric(data, ['CurrentCpu','CpuUsage','cpuUsage','CPUUsage']);
+            const cpuRow = document.getElementById('cpu-row');
+            if (cpuUsage !== null) {
+                document.getElementById('cpu-label').textContent = 'CPU LOAD';
+                document.getElementById('cpu-val').textContent = `${cpuUsage.toFixed(1)}%`;
+                document.getElementById('cpu-bar').style.width = `${cpuUsage}%`;
+                document.getElementById('top-cpu').textContent = `${cpuUsage.toFixed(1)}%`;
+                document.getElementById('cpu-val').title = data.NameCpu || '';
+                document.getElementById('cpu-model').textContent = data.NameCpu || 'CPU MODEL ONLINE';
+                cpuRow.classList.remove('hidden-widget');
+            } else {
+                cpuRow.classList.add('hidden-widget');
+                document.getElementById('cpu-model').textContent = 'AWAITING SYSTEM DATA';
+                document.getElementById('top-cpu').textContent = 'N/A';
+            }
+            let ramPercent = readMetric(data, ['RamUsage','ramUsage','RAMUsage']);
+            if (ramPercent === null && Number(data.TotalRam) > 0 && Number.isFinite(Number(data.CurrentRamAvail))) ramPercent = (1 - Number(data.CurrentRamAvail) / Number(data.TotalRam)) * 100;
+            paintMetric(ramPercent, 'ram-val', 'ram-bar');
+            document.getElementById('ram-row').classList.toggle('hidden-widget', ramPercent === null);
+            document.getElementById('top-memory').textContent = ramPercent === null ? 'N/A' : `${Math.round(ramPercent)}%`;
+            renderGpuMetrics(extractGpuMetrics(data));
+            const disk = readMetric(data, ['DiskUsage','diskUsage','SystemUsage']);
+            document.getElementById('disk-row').classList.toggle('hidden-widget', disk === null);
+            if (disk !== null) { document.getElementById('disk-label').textContent = 'DISK LOAD'; paintMetric(disk, 'disk-val', 'disk-bar'); }
+        }
+        function livelyCurrentTrack(track) {
+            if (typeof track === 'string') { try { track = JSON.parse(track); } catch { track = null; } }
+            if (track && typeof track === 'object' && track.Track) track = track.Track;
+            const t = track || {};
+            const title = t.title || t.Title || '';
+            const artist = t.artist || t.Artist || '';
+            const album = t.album || t.AlbumTitle || '';
+            trackTitleEl.textContent = title || 'NO ACTIVE TRANSMISSION';
+            trackTitleEl.title = album ? `${title} — ${album}` : title;
+            trackArtistEl.textContent = [artist, album].filter(Boolean).join(' // ') || 'WAITING FOR MEDIA';
+            mediaStateEl.textContent = title ? 'NOW PLAYING' : 'NOW PLAYING // STANDBY';
+            let thumbnail = t.thumbnail || t.Thumbnail || '';
+            if (thumbnail && !/^data:/i.test(thumbnail)) thumbnail = `data:image/png;base64,${thumbnail}`;
+            if (thumbnail) {
+                mediaArtEl.classList.remove('media-placeholder');
+                mediaArtEl.style.background = `center / cover no-repeat url("${thumbnail.replace(/["\\]/g, '')}")`;
+            } else {
+                mediaArtEl.style.background = 'radial-gradient(circle at 35% 30%, rgba(0,243,255,.32), rgba(8,14,28,.92) 68%)';
+                mediaArtEl.classList.add('media-placeholder');
+            }
+        }
+        /**
+         * LIVELY WALLPAPER PROPERTIES API INTEGRATION
+         * Handles settings updated directly from Lively's UI controls (LivelyProperties.json).
+         */
+        function livelyPropertyListener(name, val) {
+            if (val === 'true' || val === 'false') val = val === 'true';
+            switch (name) {
+                case 'themeSelect': { const key=['cyan','amber','emerald','synthwave','rgb','solar','ice'][Number(val)] || 'cyan'; setTheme(key); document.getElementById('theme-select').value=key; break; }
+                case 'audioSens': config.audioSensitivity=Number(val); document.getElementById('audio-sensitivity-value').textContent=`${config.audioSensitivity.toFixed(1)}×`; break;
+                case 'showAudioPreview': config.showAudioPreview=!!val; document.getElementById('audio-preview-toggle').checked=config.showAudioPreview; document.getElementById('spectrum-strip').classList.toggle('hidden-widget',!config.showAudioPreview); break;
+                case 'visualizerStyle': { const styles=['reactor','wave','hills']; config.visualizerStyle=styles[Math.max(0,Math.min(2,Number(val)||0))]; document.getElementById('visualizer-style').value=config.visualizerStyle; break; }
+                case 'rotateVisualizer': config.rotateVisualizer=!!val; document.getElementById('visualizer-rotation-toggle').checked=config.rotateVisualizer; break;
+                case 'gridOpacity': config.gridOpacity=Number(val); document.documentElement.style.setProperty('--grid-opacity',config.gridOpacity); document.getElementById('grid-opacity-value').textContent=`${Math.round(config.gridOpacity*100)}%`; break;
+                case 'tileOpacity': config.tileOpacity=Math.max(0,Math.min(.9,Number(val)||0)); document.documentElement.style.setProperty('--panel-opacity',1-config.tileOpacity); document.getElementById('tile-opacity-value').textContent=`${Math.round(config.tileOpacity*100)}%`; break;
+                case 'clockFormat': config.clockFormat=(String(val)==='12'||Number(val)===1)?'12':'24'; document.getElementById('clock-format').value=config.clockFormat; updateClock(); break;
+                case 'dateFormat': config.dateFormat=['system','dmy','mdy','ymd','long'].includes(String(val))?String(val):['system','dmy','mdy','ymd','long'][Number(val)]||'system'; document.getElementById('date-format').value=config.dateFormat; updateClock(); break;
+                case 'clockStyle': config.clockStyle=['neon','minimal','terminal'].includes(String(val))?String(val):['neon','minimal','terminal'][Number(val)]||'neon'; document.getElementById('clock-style').value=config.clockStyle; document.getElementById('clock-widget').className=`clock-widget clock-style-${config.clockStyle}`; break;
+                case 'fontScale': config.fontScale=Math.max(.75,Math.min(1.5,Number(val)||1)); document.documentElement.style.fontSize=`${16*config.fontScale}px`; document.getElementById('font-scale').value=config.fontScale; document.getElementById('font-scale-value').textContent=`${Math.round(config.fontScale*100)}%`; break;
+                case 'backgroundOpacity': config.backgroundOpacity=Math.max(.1,Math.min(1,Number(val)||1)); document.getElementById('background-opacity').value=config.backgroundOpacity; document.getElementById('background-opacity-value').textContent=`${Math.round(config.backgroundOpacity*100)}%`; syncCustomBackgroundVisibility(); break;
+                case 'customBgEnabled': config.customBgEnabled=!!val; document.getElementById('custom-bg-toggle').checked=config.customBgEnabled; syncCustomBackgroundVisibility(); break;
+                case 'videoAudio': config.videoAudio=!!val; syncVideoSettings(); break;
+                case 'videoVolume': config.videoVolume=Math.max(0,Math.min(1,Number(val)||0)); syncVideoSettings(); break;
+                case 'videoLoop': config.videoLoop=!!val; syncVideoSettings(); break;
+                case 'videoPlay': config.videoPlay=!!val; syncVideoSettings(); break;
+                case 'videoRate': { const speeds=[.5,.75,1,1.25,1.5,2]; config.videoRate=speeds[Math.max(0,Math.min(speeds.length-1,Number(val)||0))]; syncVideoSettings(); break; }
+                case 'videoFit': { const fits=['cover','contain','fill']; config.videoFit=fits[Math.max(0,Math.min(fits.length-1,Number(val)||0))]; syncVideoSettings(); break; }
+                case 'topField1': case 'topField2': case 'topField3': case 'bottomField1': case 'bottomField2': case 'bottomField3': {
+                    const strip=name.startsWith('top')?'top':'bottom'; const slot=Number(name.slice(-1))-1;
+                    const field=Number.isInteger(Number(val)) && String(val).trim()!=='' ? centerFieldChoices[Number(val)]?.[0] : String(val);
+                    if (centerFieldChoices.some(choice=>choice[0]===field)) { config[`${strip}Fields`][slot]=field; document.getElementById(`${strip}-field-${slot+1}`).value=field; refreshCenterFields(); }
+                    break;
+                }
+                case 'showMediaWidget': config.showMediaWidget=!!val; document.getElementById('center-media').classList.toggle('hidden-widget',!config.showMediaWidget); break;
+                case 'showHardwareWidget': config.showHardwareWidget=!!val; document.getElementById('hardware-widget').classList.toggle('hidden-widget',!config.showHardwareWidget); document.getElementById('hardware-toggle').checked=config.showHardwareWidget; break;
+                case 'enableParallax': config.enableParallax=!!val; document.getElementById('parallax-toggle').checked=config.enableParallax; break;
+                case 'enableParticles': config.enableParticles=!!val; particleCanvas.style.display=config.enableParticles?'block':'none'; document.getElementById('particles-toggle').checked=config.enableParticles; break;
+                case 'particleCount': config.particleCount=Math.max(40,Math.min(250,Number(val)||120)); syncParticleCount(); document.getElementById('particle-density').value=config.particleCount; updateSettingReadouts(); break;
+                case 'particleSpeed': config.particleSpeed=Math.max(.2,Math.min(3,Number(val)||1)); document.getElementById('particle-speed').value=config.particleSpeed; updateSettingReadouts(); break;
+                case 'particleMode': config.particleMode=Math.max(0,Math.min(2,Number(val)||0)); document.getElementById('particle-mode').value=config.particleMode; document.getElementById('active-particle-mode').textContent=['CONSTELLATION','SINGULARITY','HYPERDRIVE'][config.particleMode]; break;
+                case 'particleInteraction': config.particleInteraction=Math.max(0,Math.min(3,Number(val)||0)); document.getElementById('particle-interaction').value=config.particleInteraction; break;
+            }
+        }
+
+        // Apply Theme Color Presets
+        function setTheme(themeKey) {
+            const theme = colorThemes[themeKey] || colorThemes.cyan;
+            config.theme = themeKey;
+            const themeLabels = { cyan:'CYBER CYAN', amber:'AMBER WARNING', emerald:'MATRIX EMERALD', synthwave:'SYNTHWAVE VIOLET', rgb:'RGB PRISM', solar:'SOLAR GOLD', ice:'ICE WHITE' };
+            document.getElementById('active-theme').textContent = themeLabels[themeKey] || 'CYBER CYAN';
+            config.primaryColor = theme.primary;
+            config.secondaryColor = theme.secondary;
+            config.primaryGlow = theme.primaryGlow;
+            config.secondaryGlow = theme.secondaryGlow;
+
+            const root = document.documentElement;
+            root.style.setProperty('--primary-color', theme.primary);
+            root.style.setProperty('--primary-glow', theme.primaryGlow);
+            root.style.setProperty('--secondary-color', theme.secondary);
+            root.style.setProperty('--secondary-glow', theme.secondaryGlow);
+            root.style.setProperty('--border-color', theme.primaryGlow);
+            const schemeIndex = ({ cyan: 0, rgb: 1, synthwave: 2, emerald: 3, solar: 4, ice: 5, amber: 4 })[themeKey] ?? 0;
+            config.schemeIndex = schemeIndex;
+            const scheme = particlePalette[schemeIndex];
+            particles.forEach(p => { p.color = scheme[Math.floor(Math.random() * scheme.length)]; });
+        }
+
+        // Mouse Move Parallax Tracker & Coordinate HUD updates
+        window.addEventListener('mousemove', (e) => {
+            targetMouseX = e.clientX;
+            targetMouseY = e.clientY;
+            particleMouse.x = e.clientX;
+            particleMouse.y = e.clientY;
+            particleMouse.active = true;
+            clearTimeout(particleMouse.idleTimer);
+            particleMouse.idleTimer = setTimeout(() => { particleMouse.active = false; }, 3000);
+
+            coordReadoutEl.textContent = `POS: [X: ${String(e.clientX).padStart(4, '0')} | Y: ${String(e.clientY).padStart(4, '0')}]`;
+        });
+        window.addEventListener('mousedown', e => particleShockwaves.push({x:e.clientX,y:e.clientY,radius:8,alpha:.9,color:particleColor()}));
+        window.addEventListener('mouseleave', () => { particleMouse.active = false; });
+
+        // Interactive Settings UI Modal Listeners
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeSettings = document.getElementById('close-settings');
+
+        settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            settingsModal.classList.toggle('active');
+        });
+
+        closeSettings.addEventListener('click', () => {
+            settingsModal.classList.remove('active');
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!settingsModal.contains(e.target) && e.target !== settingsBtn) {
+                settingsModal.classList.remove('active');
+            }
+        });
+
+        // DOM Settings UI Bindings
+        document.getElementById('theme-select').addEventListener('change', (e) => {
+            livelyPropertyListener('themeSelect', e.target.selectedIndex);
+        });
+
+        document.getElementById('audio-sensitivity').addEventListener('input', (e) => {
+            livelyPropertyListener('audioSens', parseFloat(e.target.value));
+        });
+        document.getElementById('audio-preview-toggle').addEventListener('change',e=>livelyPropertyListener('showAudioPreview',e.target.checked));
+        document.getElementById('visualizer-style').addEventListener('change',e=>livelyPropertyListener('visualizerStyle',e.target.selectedIndex));
+        document.getElementById('visualizer-rotation-toggle').addEventListener('change',e=>livelyPropertyListener('rotateVisualizer',e.target.checked));
+
+        document.getElementById('grid-opacity').addEventListener('input', (e) => {
+            livelyPropertyListener('gridOpacity', parseFloat(e.target.value));
+        });
+        document.getElementById('tile-opacity').addEventListener('input', e => livelyPropertyListener('tileOpacity', parseFloat(e.target.value)));
+        document.getElementById('clock-format').addEventListener('change', e => livelyPropertyListener('clockFormat', e.target.value));
+        document.getElementById('date-format').addEventListener('change', e => livelyPropertyListener('dateFormat', e.target.value));
+        document.getElementById('clock-style').addEventListener('change', e => livelyPropertyListener('clockStyle', e.target.value));
+        document.getElementById('font-scale').addEventListener('input', e => livelyPropertyListener('fontScale', parseFloat(e.target.value)));
+        document.getElementById('background-opacity').addEventListener('input', e => livelyPropertyListener('backgroundOpacity', parseFloat(e.target.value)));
+        document.getElementById('custom-bg-toggle').addEventListener('change', e => livelyPropertyListener('customBgEnabled', e.target.checked));
+        document.getElementById('video-audio-toggle').addEventListener('change', e => livelyPropertyListener('videoAudio', e.target.checked));
+        document.getElementById('video-volume').addEventListener('input', e => livelyPropertyListener('videoVolume', parseFloat(e.target.value)));
+        document.getElementById('video-loop-toggle').addEventListener('change', e => livelyPropertyListener('videoLoop', e.target.checked));
+        document.getElementById('video-play-toggle').addEventListener('change', e => livelyPropertyListener('videoPlay', e.target.checked));
+        document.getElementById('video-rate').addEventListener('change', e => livelyPropertyListener('videoRate', e.target.selectedIndex));
+        document.getElementById('video-fit').addEventListener('change', e => livelyPropertyListener('videoFit', e.target.selectedIndex));
+        const centerPropertyNames = {top:['topField1','topField2','topField3'],bottom:['bottomField1','bottomField2','bottomField3']};
+        for (const strip of ['top','bottom']) {
+            config[`${strip}Fields`].forEach((field,index)=>{
+                const select=document.getElementById(`${strip}-field-${index+1}`);
+                centerFieldChoices.forEach(([value,label])=>select.add(new Option(label,value)));
+                select.value=field;
+                select.addEventListener('change',()=>livelyPropertyListener(centerPropertyNames[strip][index],select.value));
+            });
+        }
+        document.getElementById('custom-bg-file').addEventListener('change', event => {
+            const file=event.target.files?.[0]; if(!file) return;
+            const isImage=file.type.startsWith('image/');
+            const isVideo=['video/mp4','video/webm','video/ogg'].includes(file.type);
+            if(!isImage&&!isVideo) { alert('Choose a supported image, MP4, WebM, or Ogg video.'); event.target.value=''; return; }
+            if(file.size>(isVideo?150:30)*1024*1024) { alert(`Choose a ${isVideo?'video':'image'} smaller than ${isVideo?'150':'30'} MB.`); event.target.value=''; return; }
+            const asset={blob:file,kind:isVideo?'video':'image'};
+            config.customBgEnabled=true; document.getElementById('custom-bg-toggle').checked=true;
+            applyCustomBackgroundAsset(asset);
+            document.getElementById('custom-bg-status').textContent='BACKGROUND ACTIVE // SAVING';
+            saveCustomBackgroundAsset(asset).then(()=>document.getElementById('custom-bg-status').textContent=`${isVideo?'VIDEO':'IMAGE'} ACTIVE // SAVED`)
+                .catch(()=>document.getElementById('custom-bg-status').textContent=`${isVideo?'VIDEO':'IMAGE'} ACTIVE // THIS SESSION`);
+        });
+        document.getElementById('clear-custom-bg').addEventListener('click',()=>{ clearSavedCustomBackground(); applyCustomBackgroundAsset(null); document.getElementById('custom-bg-file').value=''; document.getElementById('custom-bg-status').textContent='NO CUSTOM BACKGROUND'; });
+
+        document.getElementById('parallax-toggle').addEventListener('change', (e) => {
+            config.enableParallax = e.target.checked;
+        });
+        document.getElementById('particle-density').addEventListener('input', e => livelyPropertyListener('particleCount', Number(e.target.value)));
+        document.getElementById('particle-speed').addEventListener('input', e => livelyPropertyListener('particleSpeed', Number(e.target.value)));
+        document.getElementById('particle-mode').addEventListener('change', e => livelyPropertyListener('particleMode', Number(e.target.value)));
+        document.getElementById('particle-interaction').addEventListener('change', e => livelyPropertyListener('particleInteraction', Number(e.target.value)));
+        document.getElementById('particles-toggle').addEventListener('change', e => livelyPropertyListener('enableParticles', e.target.checked));
+        document.getElementById('hardware-toggle').addEventListener('change', e => livelyPropertyListener('showHardwareWidget', e.target.checked));
+        document.getElementById('hardware-widget').classList.toggle('hidden-widget', !config.showHardwareWidget);
+        document.getElementById('theme-select').value = 'cyan';
+        document.getElementById('particles-toggle').checked = config.enableParticles;
+        document.getElementById('hardware-toggle').checked = config.showHardwareWidget;
+        document.getElementById('audio-sensitivity').value = config.audioSensitivity;
+        document.getElementById('audio-preview-toggle').checked=config.showAudioPreview;
+        document.getElementById('visualizer-style').value=config.visualizerStyle;
+        document.getElementById('visualizer-rotation-toggle').checked=config.rotateVisualizer;
+        document.getElementById('spectrum-strip').classList.toggle('hidden-widget',!config.showAudioPreview);
+        document.getElementById('grid-opacity').value = config.gridOpacity;
+        document.getElementById('tile-opacity').value = config.tileOpacity;
+        document.documentElement.style.setProperty('--panel-opacity', 1 - config.tileOpacity);
+        document.getElementById('tile-opacity-value').textContent = `${Math.round(config.tileOpacity * 100)}%`;
+        document.getElementById('background-opacity').value = config.backgroundOpacity;
+        document.getElementById('background-opacity-value').textContent = `${Math.round(config.backgroundOpacity*100)}%`;
+        document.getElementById('font-scale').value = config.fontScale;
+        document.getElementById('font-scale-value').textContent = `${Math.round(config.fontScale*100)}%`;
+        document.documentElement.style.fontSize = `${16*config.fontScale}px`;
+        loadCustomBackgroundAsset().then(asset=>{
+            applyCustomBackgroundAsset(asset);
+            document.getElementById('custom-bg-status').textContent=asset?`${asset.kind==='video'?'VIDEO':'IMAGE'} ACTIVE // SAVED`:'NO CUSTOM BACKGROUND';
+        });
+        document.getElementById('custom-bg-toggle').checked = config.customBgEnabled;
+        syncVideoSettings();
+        updateSettingReadouts();
+        document.getElementById('particle-density').value = config.particleCount;
+        document.getElementById('particle-speed').value = config.particleSpeed;
+        document.getElementById('particle-mode').value = config.particleMode;
+        document.getElementById('particle-interaction').value = config.particleInteraction;
+        setTheme('cyan');
+        document.documentElement.style.setProperty('--grid-opacity', config.gridOpacity);
+        document.getElementById('center-media').classList.toggle('hidden-widget', !config.showMediaWidget);
+        refreshCenterFields();
+    </script>
+</body>
+</html>
